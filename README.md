@@ -9,8 +9,13 @@ It forwards to Cloudflare's native OpenAI-compatible endpoint
 tool-calling stay byte-for-byte OpenAI-shaped — which is what agentic clients
 like [opencode](https://opencode.ai) expect.
 
+Requests are routed through a Cloudflare **AI Gateway** (slug `glm-proxy`) by
+adding a `cf-aig-gateway-id` header — giving request logging, caching,
+rate-limiting, and cost/latency analytics in the dashboard. The endpoint and
+model id are unchanged; only the header is added.
+
 ```
-opencode  ──Bearer PROXY_TOKEN──▶  glm-proxy Worker  ──Bearer CF_API_TOKEN──▶  Workers AI (GLM-5.2)
+opencode ──Bearer PROXY_TOKEN──▶ glm-proxy Worker ──Bearer CF_API_TOKEN──▶ AI Gateway ──▶ Workers AI (GLM-5.2)
 ```
 
 The real Cloudflare API token never leaves the Worker; clients only hold the
@@ -32,13 +37,18 @@ npm install
 
 # secrets (not committed)
 wrangler secret put CF_ACCOUNT_ID   # your Cloudflare account id
-wrangler secret put CF_API_TOKEN    # API token with Workers AI access
+wrangler secret put CF_API_TOKEN    # API token: Workers AI + AI Gateway access
 wrangler secret put PROXY_TOKEN     # long random shared secret
 
 wrangler deploy
 ```
 
 For local dev, copy `.dev.vars.example` to `.dev.vars` and run `wrangler dev`.
+
+The AI Gateway slug is the `GATEWAY_ID` var in `wrangler.jsonc` (`glm-proxy`).
+Create that gateway once (dashboard or `POST /accounts/{id}/ai-gateway/gateways`),
+or set `GATEWAY_ID` to `default` to use the auto-created gateway. Remove the var
+to bypass the gateway and call Workers AI directly.
 
 ## Test
 

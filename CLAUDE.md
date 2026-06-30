@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A single-file Cloudflare Worker (`glm-proxy`) that exposes an **OpenAI-compatible** API and reverse-proxies it to Cloudflare Workers AI's native OpenAI endpoint for the model `@cf/zai-org/glm-5.2`. Its purpose is to let OpenAI-compatible clients (specifically [opencode](https://opencode.ai)) talk to GLM-5.2 without holding the Cloudflare API token.
+A single-file Cloudflare Worker (`glm-proxy`) that exposes an **OpenAI-compatible** API and reverse-proxies it to Cloudflare Workers AI's native OpenAI endpoint for the model `@cf/zai-org/glm-5.2`. Its purpose is to let OpenAI-compatible clients (specifically [opencode](https://opencode.ai)) talk to GLM-5.2 without holding the Cloudflare API token. Requests are routed through a Cloudflare AI Gateway (slug `glm-proxy`) for logging, caching, and cost/latency analytics.
 
 Deployed at `https://glm-proxy.changtimwu.workers.dev`.
 
@@ -27,13 +27,13 @@ export CLOUDFLARE_ACCOUNT_ID=$(grep '^CLOUDFLARE_ACCOUNT_ID=' ../cf.env | cut -d
 export CLOUDFLARE_API_TOKEN=$(grep '^CLOUDFLARE_API_TOKEN=' ../cf.env | cut -d= -f2- | tr -d '[:space:]')
 ```
 
-`CLOUDFLARE_ACCOUNT_ID` is **required** — the API token is account-scoped and cannot list accounts, so wrangler can't auto-detect it. For the same reason `GET /user/tokens/verify` returns `Invalid API Token` for this token even though it is valid; the successful `wrangler deploy` is the real check. Minimum token scopes: **Workers Scripts: Write** (deploy) + **Workers AI: Read** (inference).
+`CLOUDFLARE_ACCOUNT_ID` is **required** — the API token is account-scoped and cannot list accounts, so wrangler can't auto-detect it. For the same reason `GET /user/tokens/verify` returns `Invalid API Token` for this token even though it is valid; the successful `wrangler deploy` is the real check. Minimum token scopes: **Workers Scripts: Write** (deploy) + **Workers AI: Read** (inference) + **AI Gateway: Read/Edit** (routing through / creating the gateway).
 
 ### Secrets (runtime, set on the deployed Worker)
 
 ```sh
 printf '%s' "<value>" | npx wrangler secret put CF_ACCOUNT_ID   # CF account id
-printf '%s' "<value>" | npx wrangler secret put CF_API_TOKEN    # CF token with Workers AI access
+printf '%s' "<value>" | npx wrangler secret put CF_API_TOKEN    # CF token: Workers AI + AI Gateway access
 printf '%s' "<value>" | npx wrangler secret put PROXY_TOKEN     # shared bearer clients must present
 ```
 
@@ -44,11 +44,12 @@ For local `wrangler dev`, put the same three keys in `.dev.vars` (copy `.dev.var
 The whole Worker is `src/index.js`. Request flow:
 
 ```
-client ──Bearer PROXY_TOKEN──▶ Worker ──Bearer CF_API_TOKEN──▶ api.cloudflare.com/.../ai/v1/...
+client ──Bearer PROXY_TOKEN──▶ Worker ──Bearer CF_API_TOKEN + cf-aig-gateway-id──▶ api.cloudflare.com/.../ai/v1/... (via AI Gateway)
 ```
 
 - **Auth swap (the core idea):** clients authenticate with `PROXY_TOKEN`; the Worker validates it (constant-time compare) and replaces it with the real `CF_API_TOKEN` before forwarding. The Cloudflare token never leaves the Worker.
 - **Path mapping:** any `/v1/*` request is forwarded to `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/*`. `/` and `/health` return status JSON; everything else 404s.
+- **AI Gateway routing:** the Worker adds `cf-aig-gateway-id: ${GATEWAY_ID}` (set in `wrangler.jsonc`, currently `glm-proxy`) so requests are logged/cached/analyzed by AI Gateway. URL and model id are unchanged — per the 2026-05-21 REST API, Workers AI routes through a gateway via this header, *not* a `gateway.ai.cloudflare.com` URL (that compat endpoint is deprecated). Remove the var to bypass the gateway.
 - **Why a passthrough proxy, not the `env.AI` binding:** the binding returns Workers AI's *native* response shape, which would have to be re-mapped to OpenAI format (tool_calls, SSE deltas). Forwarding to Cloudflare's OpenAI-compatible endpoint makes Cloudflare do that conversion, so streaming and **function-calling stay byte-for-byte correct** — essential because the consuming agent (opencode) depends on tool calls. Preserve this design; do not switch to the AI binding without re-implementing format conversion.
 - The upstream response body is streamed straight back (preserves SSE for `stream: true`).
 

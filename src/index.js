@@ -18,10 +18,18 @@
  * for the real Cloudflare API token before forwarding, so the CF token never
  * leaves the Worker.
  *
+ * AI Gateway: when GATEWAY_ID is set we add the `cf-aig-gateway-id` header so
+ * the request is routed through that gateway (logging, caching, rate limiting,
+ * cost/latency analytics). The endpoint and model id are unchanged — per the
+ * 2026-05-21 AI Gateway REST API, Workers AI models route through a gateway via
+ * this header alone, not a different `gateway.ai.cloudflare.com` URL.
+ *
  * Secrets (set with `wrangler secret put`):
  *   CF_ACCOUNT_ID  - Cloudflare account id
- *   CF_API_TOKEN   - Cloudflare API token with Workers AI access
+ *   CF_API_TOKEN   - Cloudflare API token with Workers AI + AI Gateway access
  *   PROXY_TOKEN    - shared secret that clients (opencode) must present
+ * Vars (in wrangler.jsonc):
+ *   GATEWAY_ID     - AI Gateway slug to route through (omit to bypass the gateway)
  */
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4";
@@ -84,6 +92,8 @@ export default {
     // Build a clean header set; never forward the client's (proxy) token.
     const fwd = new Headers();
     fwd.set("authorization", `Bearer ${env.CF_API_TOKEN}`);
+    // Route through AI Gateway (logging, caching, analytics) when configured.
+    if (env.GATEWAY_ID) fwd.set("cf-aig-gateway-id", env.GATEWAY_ID);
     const ct = request.headers.get("content-type");
     if (ct) fwd.set("content-type", ct);
     const accept = request.headers.get("accept");

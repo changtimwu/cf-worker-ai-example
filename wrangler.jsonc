@@ -5,6 +5,11 @@
   "compatibility_date": "2026-06-30",
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    // AI Gateway slug to route inference through (logging/caching/analytics).
+    // Not a secret. Remove this var to bypass the gateway and call Workers AI directly.
+    "GATEWAY_ID": "glm-proxy"
   }
   // Secrets (not committed) — set with `wrangler secret put <NAME>`:
   //   CF_ACCOUNT_ID, CF_API_TOKEN, PROXY_TOKEN
