@@ -50,6 +50,11 @@ Create that gateway once (dashboard or `POST /accounts/{id}/ai-gateway/gateways`
 or set `GATEWAY_ID` to `default` to use the auto-created gateway. Remove the var
 to bypass the gateway and call Workers AI directly.
 
+Caching is enabled on the gateway (`cache_ttl=3600`): identical requests within
+the hour are served from cache — look for `cached: true` in the gateway logs or
+the dashboard. (The `api.cloudflare.com` REST path doesn't return a cache-status
+response header, so cache hits show up in the logs, not in the client response.)
+
 ## Test
 
 ```sh
@@ -57,6 +62,13 @@ curl https://glm-proxy.<your-subdomain>.workers.dev/v1/chat/completions \
   -H "Authorization: Bearer $PROXY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"@cf/zai-org/glm-5.2","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Or use the bundled example client to check whether a token is accepted:
+
+```sh
+PROXY_TOKEN=<your token> ./examples/check-token.sh    # 200 -> valid, 401 -> rejected
+# override the target with PROXY_URL=https://my-worker.workers.dev
 ```
 
 ## Use from opencode
