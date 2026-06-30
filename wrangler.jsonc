@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "glm-proxy",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-30",
+  "observability": {
+    "enabled": true
+  }
+  // Secrets (not committed) — set with `wrangler secret put <NAME>`:
+  //   CF_ACCOUNT_ID, CF_API_TOKEN, PROXY_TOKEN
+  // For local `wrangler dev`, put them in .dev.vars instead.
+}

@@ -1,0 +1,5 @@
+# Copy to `.dev.vars` for local `wrangler dev` (gitignored).
+# In production these are set as Worker secrets via `wrangler secret put <NAME>`.
+CF_ACCOUNT_ID=your-cloudflare-account-id
+CF_API_TOKEN=your-workers-ai-api-token
+PROXY_TOKEN=a-long-random-shared-secret
